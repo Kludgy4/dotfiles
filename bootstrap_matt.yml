@@ -1,25 +1,52 @@
 - name: Bootstrap development environment
   hosts: localhost
-
   tasks:
   - name: Install packages with apt
     become: yes
-    ansible.builtin.apt:
+    apt:
       name:
+        - zsh
         - git
         - tmux
         - neovim
         - stow
       state: present
-      when: ansible_distribution == "Ubuntu"
+    when: ansible_distribution == "Ubuntu"
 
-  - name: Clone dotfiles to home directory
+  - name: Set Default Shell to zsh
+    become: yes
+    shell: "chsh -s $(which zsh)"
+
+  - name: Check if Oh My Zsh is already installed
+    stat:
+      path: "{{ ansible_env.HOME }}/.oh-my-zsh"
+    register: oh_my_zsh
+
+  - name: Install Oh My Zsh
+    become: yes
+    when: not oh_my_zsh.stat.exists
+    shell: 'sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"'
+
+  - name: Install p10k
     git:
-      repo: git@github.com:Kludgy4/dotfiles.git
-      dest: "/home/{{ ansible_user }}/personal_config"
+      repo: 'https://github.com/romkatv/powerlevel10k.git'
+      dest: "{{ zsh_custom_path }}/themes/powerlevel10k"
+      depth: 1
+    vars:
+      zsh_custom_path: "{{ lookup('env', 'ZSH_CUSTOM') or (ansible_env.HOME ~ '/.oh-my-zsh/custom') }}"
+
+  - name: Ensure powerlevel10k is set in .zshrc
+    lineinfile:
+      path: "{{ ansible_env.HOME }}/.zshrc"
+      regexp: '^ZSH_THEME='
+      line: 'ZSH_THEME="powerlevel10k/powerlevel10k"'
+      create: yes
 
   - name: stow dotfiles
-    shell: "stow /home/{{ ansible_user }}/personal_config/dotfiles --target {{ ansible_env.HOME }} --verbose=2"
+    shell: "stow --adopt dotfiles/ --target {{ ansible_env.HOME }} --verbose=2"
     register: result
     changed_when: 'result.stderr is search("LINK: ")'
+
+  - name: remove changes
+    shell: "git reset --hard"
 
