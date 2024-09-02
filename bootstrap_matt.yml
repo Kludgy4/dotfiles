@@ -1,0 +1,25 @@
+- name: Bootstrap development environment
+  hosts: localhost
+
+  tasks:
+  - name: Install packages with apt
+    become: yes
+    ansible.builtin.apt:
+      name:
+        - git
+        - tmux
+        - neovim
+        - stow
+      state: present
+      when: ansible_distribution == "Ubuntu"
+
+  - name: Clone dotfiles to home directory
+    git:
+      repo: git@github.com:Kludgy4/dotfiles.git
+      dest: "/home/{{ ansible_user }}/personal_config"
+
+  - name: stow dotfiles
+    shell: "stow /home/{{ ansible_user }}/personal_config/dotfiles --target {{ ansible_env.HOME }} --verbose=2"
+    register: result
+    changed_when: 'result.stderr is search("LINK: ")'
+
